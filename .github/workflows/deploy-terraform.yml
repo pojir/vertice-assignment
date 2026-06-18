@@ -1,0 +1,58 @@
+name: Deploy terraform code to AWS
+run-name: ${{ github.actor }} is deploying terraform
+on: [push]
+jobs:
+  apply:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.3
+      - name: Hashicorp - Terraform setup
+        uses: hashicorp/setup-terraform@v4.0.1
+      - name: Configure AWS Credentials for github actions
+        uses: aws-actions/configure-aws-credentials@v6.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Validate
+        run: terraform validate
+        continue-on-error: false
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+      - name: Upload terraform state
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: |
+            terraform.tfstate
+            terraform.tfstate.backup
+          if-no-files-found: error
+          retention-days: 1
+  destroy:
+    name: Terraform destroy
+    runs-on: ubuntu-latest
+    needs: apply
+    environment: terraform-destroy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.3
+      - name: Hashicorp - Terraform setup
+        uses: hashicorp/setup-terraform@v4.0.1
+      - name: Configure AWS Credentials for github actions
+        uses: aws-actions/configure-aws-credentials@v6.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+      - name: Download terraform state
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-state
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
